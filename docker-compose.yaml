@@ -1,0 +1,241 @@
+services:
+  alpha_panel_web:
+    build:
+      context: ./alpha-panel/web
+      dockerfile: Dockerfile
+    container_name: alpha_panel_web
+    hostname: alpha_panel_web
+    restart: always
+    volumes:
+      - ./alpha-panel/web/httpdocs:/var/www/AlphaPanel/httpdocs
+      - ./alpha-panel/web/logs:/var/log/caddy
+      - ./alpha-panel/web/ssl:/var/www/ssl
+      - ./alpha-panel/web/Caddyfile:/etc/frankenphp/Caddyfile
+      - ./alpha-panel/web/caddy_data:/data
+      - ./vhosts:/var/www/vhosts
+    environment:
+      PANEL_DOMAIN: ${PANEL_DOMAIN}
+      CF_API_TOKEN: ${CF_API_TOKEN}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+    ports:
+      - "${PRIVATE_NETWORK_IP}:7443:443"
+    networks:
+      - vhost_network
+
+  alpha_panel_webhook:
+    build:
+      context: ./alpha-panel/webhook
+      dockerfile: Dockerfile
+    container_name: alpha_panel_webhook
+    hostname: alpha_panel_webhook
+    restart: always
+    volumes:
+      - ./alpha-panel/webhook:/app
+      - ./vhosts:/var/www/vhosts
+      - ./alpha-panel/webhook/ssh_key:/root/.ssh
+    networks:
+      - vhost_network
+
+  frankenphp:
+    build:
+      context: ./frankenphp
+      dockerfile: Dockerfile
+    container_name: frankenphp
+    hostname: frankenphp
+    restart: always
+    environment:
+      CF_API_TOKEN: ${CF_API_TOKEN}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      PUBLIC_NETWORK_IP: ${PUBLIC_NETWORK_IP}
+      PRIVATE_NETWORK_IP: ${PRIVATE_NETWORK_IP}
+    volumes:
+        - ./frankenphp/Caddyfile:/etc/frankenphp/Caddyfile
+        - ./frankenphp/sites-enabled:/etc/frankenphp/sites-enabled
+        - ./frankenphp/caddy_data:/data
+        - ./vhosts:/var/www/vhosts
+        - ./php-code-server/run/:/run/php/
+        - ./frankenphp/logs:/var/log/caddy/
+    networks:
+      - vhost_network
+    depends_on:
+      - mysql
+      - redis
+      - mongodb
+      - ftp
+      - meilisearch
+    ports:
+      - "${PUBLIC_NETWORK_IP}:80:80"
+      - "${PUBLIC_NETWORK_IP}:443:443"
+
+  php-code-server:
+    build:
+      context: ./php-code-server
+      dockerfile: Dockerfile
+    container_name: php-code-server
+    hostname: php-code-server
+    restart: always
+    user: root
+    environment:
+      - PASSWORD=${CODE_SERVER_PASSWORD}
+      - SUDO_PASSWORD=${CODE_SERVER_SUDO_PASSWORD}
+      - PROXY_DOMAIN=${CODE_SERVER_DOMAIN}:7443
+      - DEFAULT_WORKSPACE=/var/www/vhosts
+      - TZ=Etc/UTC
+      - ALLOW_ROOT=true
+    volumes:
+      - ./php-code-server/run/:/run/php/
+      - ./vhosts:/var/www/vhosts
+      - ./php-code-server/supervisor.d:/etc/supervisor/conf.d/
+
+      - ./php-code-server/8.4/fpm.d/:/etc/php/8.4/fpm/pool.d/
+      - ./php-code-server/8.3/fpm.d:/etc/php/8.3/fpm/pool.d/
+      - ./php-code-server/8.2/fpm.d:/etc/php/8.2/fpm/pool.d/
+      - ./php-code-server/8.1/fpm.d:/etc/php/8.1/fpm/pool.d/
+      - ./php-code-server/8.0/fpm.d:/etc/php/8.0/fpm/pool.d/
+
+      - ./php-code-server/php.ini:/etc/php/8.4/fpm/conf.d/99999-custom.ini
+      - ./php-code-server/php.ini:/etc/php/8.3/fpm/conf.d/99999-custom.ini
+      - ./php-code-server/php.ini:/etc/php/8.2/fpm/conf.d/99999-custom.ini
+      - ./php-code-server/php.ini:/etc/php/8.1/fpm/conf.d/99999-custom.ini
+      - ./php-code-server/php.ini:/etc/php/8.0/fpm/conf.d/99999-custom.ini
+
+      - ./ftp-config/users.env:/etc/users.env:ro
+      - ./code-server/data:/root
+
+      - ./apache/sites-enabled:/etc/apache2/sites-enabled
+      - ./apache/conf-enabled/remote_ip.conf:/etc/apache2/conf-enabled/remote_ip.conf
+      - ./apache/conf-enabled/cloudflare.conf:/etc/apache2/conf-enabled/cloudflare.conf
+      - ./apache/conf-enabled/security.conf:/etc/apache2/conf-enabled/security.conf
+      - ./apache/conf-enabled/deflate.conf:/etc/apache2/conf-enabled/deflate.conf
+      - ./vhosts:/var/www/vhosts
+      - ./php-code-server/run/:/run/php/
+    depends_on:
+      - mysql
+      - mongodb
+      - redis
+      - meilisearch
+      - ftp
+    networks:
+      - vhost_network
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.14
+    container_name: meilisearch
+    hostname: meilisearch
+    volumes:
+      - ./meilisearch/data:/meili_data
+      - ./meilisearch/tmp:/tmp
+    restart: always
+    environment:
+      - MEILI_ENV=production
+      - TMPDIR=/tmp
+    ports:
+      - "${PRIVATE_NETWORK_IP}:7700:7700"
+    networks:
+      - vhost_network
+    command: ["meilisearch", "--master-key", "${MEILISEARCH_MASTER_KEY}"]
+
+  mysql:
+    image: mysql:9.3.0
+    container_name: mysql
+    hostname: db
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+      - ./mysql/conf.d:/etc/mysql/conf.d
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    ports:
+      - "${PRIVATE_NETWORK_IP}:3306:3306"
+    networks:
+      - vhost_network
+#        aliases:
+#          - db.niyazi.org
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    hostname: redis.niyazi.org
+    restart: always
+    volumes:
+      - ./redis:/data
+    ports:
+      - "${PRIVATE_NETWORK_IP}:6379:6379"
+    networks:
+      - vhost_network
+
+  mongodb:
+    image: mongodb/mongodb-community-server:8.0.8-ubuntu2204
+    container_name: mongodb
+    hostname: mongodb.niyazi.org
+    restart: always
+    user: root
+    volumes:
+      - ./mongodb:/data/db
+    ports:
+      - "${PRIVATE_NETWORK_IP}:27017:27017"
+    networks:
+      - vhost_network
+
+  backlink_service:
+    build:
+      context: ./vhosts/backlink.name/service
+      dockerfile: Dockerfile
+    container_name: backlink_service
+    hostname: backlinkdb
+    restart: always
+    volumes:
+      - ./vhosts/backlink.name/service:/app
+    networks:
+      - vhost_network
+  password:
+    image: "vaultwarden/server:latest"
+    hostname: "${VAULTWARDEN_DOMAIN}"
+    container_name: password
+    restart: always
+    volumes:
+      - "./vaultwarden/data:/data/"
+    environment:
+      - "DATABASE_URL=mysql://${VAULTWARDEN_DB_USER}:${VAULTWARDEN_DB_PASSWORD}@${VAULTWARDEN_DB_HOST}/${VAULTWARDEN_DB_NAME}"
+      - "RUST_BACKTRACE=1"
+    networks:
+      - vhost_network
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: phpmyadmin
+    hostname: pma.niyazi.org
+    restart: always
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+#      PMA_USER: root
+#      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    networks:
+      - vhost_network
+  ftp:
+    image: delfer/alpine-ftp-server    # Alpine + vsftpd, FTPS destekli
+    container_name: ftp-server
+    hostname: ftp-server
+    restart: always
+    ports:
+      - "${PRIVATE_NETWORK_IP}:21:21"                        # komut kanalı
+      - "${PRIVATE_NETWORK_IP}:21000-21010:21000-21010"      # pasif mod port aralığı
+    environment:
+      # Dış IP veya hostname (PASV yanıtlarında kullanılır)
+      ADDRESS: server.niyazi.org
+      MIN_PORT: 21000
+      MAX_PORT: 21010
+    env_file:
+      - ./ftp-config/users.env
+    entrypoint: ["/init.sh"]
+    volumes:
+      - ./vhosts:/var/www/vhosts:rw
+      - ./ftp-config/users.env:/config/users.env:ro
+      - ./ftp-config/init.sh:/init.sh:ro
+    networks:
+      - vhost_network
+
+networks:
+  vhost_network:
+    name: vhost_network
+    driver: bridge

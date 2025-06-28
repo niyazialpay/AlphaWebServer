@@ -188,6 +188,7 @@ services:
       - ./vhosts/backlink.name/service:/app
     networks:
       - vhost_network
+
   password:
     image: "vaultwarden/server:latest"
     hostname: "${VAULTWARDEN_DOMAIN}"
@@ -200,6 +201,7 @@ services:
       - "RUST_BACKTRACE=1"
     networks:
       - vhost_network
+
   phpmyadmin:
     image: phpmyadmin:latest
     container_name: phpmyadmin
@@ -212,6 +214,7 @@ services:
 #      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     networks:
       - vhost_network
+
   ftp:
     image: delfer/alpine-ftp-server    # Alpine + vsftpd, FTPS destekli
     container_name: ftp-server

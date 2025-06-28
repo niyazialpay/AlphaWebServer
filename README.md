@@ -1,6 +1,51 @@
 # Docker Compose Web Stack
 
-This repository provides a Docker Compose setup to quickly spin up a full web-hosting stack, including FrankenPHP Caddy, Apache, PHP-FPM, databases, and various services.
+This repository provides a Docker Compose setup to spin up a FrankenPHP Caddy web server and MySQL database to host your websites. For sites using standard `.htaccess` rewrite rules, Apache and PHP-FPM are included and proxied through Caddy. Caddy’s built-in Cloudflare DNS support allows you to set your Cloudflare API key in the environment and obtain SSL certificates via DNS-01 challenge.
+
+---
+
+## Caddyfile
+
+Create a Caddyfile at `frankenphp/sites-enabled/domain.com/Caddyfile`:
+
+```caddyfile
+(reverse-proxy-domain-com) {
+    import common-headers
+    import common-tls
+    encode zstd br gzip
+    root * /var/www/vhosts/domain.com/httpdocs/public
+    php_server
+    file_server
+    log {
+        output file /var/log/caddy/domain.com.log
+        format console
+    }
+}
+
+domain.com:80 {
+    import common-headers
+    root * /var/www/vhosts/domain.com/httpdocs/public
+    redir https://domain.com{uri}
+}
+
+www.domain.com:80 {
+    import common-headers
+    root * /var/www/vhosts/domain.com/httpdocs/public
+    redir https://domain.com{uri}
+}
+
+domain.com:443 {
+    import reverse-proxy-domain-com
+}
+
+www.domain.com:443 {
+    redir https://domain.com{uri}
+}
+
+*.domain.com:443 {
+    import reverse-proxy-domain-com
+}
+```
 
 ## 🚀 Overview
 
@@ -20,7 +65,24 @@ This repository provides a Docker Compose setup to quickly spin up a full web-ho
 ## ⚙️ Configuration
 
 1. **Clone this repository.**  
-2. In the `ftp-config/` directory, rename:
+2. Rename .env.example to .env and set the following variables:
+      ```bash
+      mv .env.example .env
+      ```
+
+      ```dotenv
+      CF_API_TOKEN=your_cloudflare_api_token
+      # MySQL
+      MYSQL_ROOT_PASSWORD=your_mysql_root_password
+    
+      # Cloudflare DNS (for Caddy DNS-01 challenge)
+      CLOUDFLARE_API_TOKEN=your_cloudflare_api_token
+    
+      # Network IPs
+      PRIVATE_NETWORK_IP=your_private_network_ip
+      PUBLIC_NETWORK_IP=your_public_network_ip
+   ```
+3.In the `ftp-config/` directory, rename:
 
    ```bash
    mv users.env.example users.env

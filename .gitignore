@@ -27,7 +27,9 @@ php-code-server/*
 !php-code-server/8.2/fpm.d/www.conf
 !php-code-server/8.3/fpm.d/www.conf
 !php-code-server/8.4/fpm.d/www.conf
-!php-code-server/supervisor.d/
+!php-code-server/supervisor.d/apache2.conf
+!php-code-server/supervisor.d/php-fpm.conf
+!php-code-server/supervisor.d/code-server.conf
 !php-code-server/php.ini
 !php-code-server/Dockerfile
 !php-code-server/user-entrypoint.sh

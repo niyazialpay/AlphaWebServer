@@ -210,8 +210,9 @@ services:
     environment:
       PMA_HOST: mysql
       PMA_PORT: 3306
-#      PMA_USER: root
-#      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      UPLOAD_LIMIT: 2G
+      PMA_USER: root
+      PMA_PASSWORD: ${MYSQL_ROOT_PASSWORD}
     networks:
       - vhost_network
 
@@ -235,6 +236,7 @@ services:
       - ./vhosts:/var/www/vhosts:rw
       - ./ftp-config/users.env:/config/users.env:ro
       - ./ftp-config/init.sh:/init.sh:ro
+      - ./ftp-config/vsftpd.conf:/etc/vsftpd/vsftpd.conf:ro
     networks:
       - vhost_network
 
